@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import threading
 import time
+import math
 
 ROBOT_JOINTS = [
     'shoulder_pan_joint',
@@ -20,7 +21,7 @@ ROBOT_JOINTS = [
     'wrist_3_joint'
 ]
 
-HOME = [0, -np.pi/2, 0, -np.pi/2, 0, 0]
+# HOME = [0, -np.pi/2, 0, -np.pi/2, 0, 0]
 
 class DataRecorder(Node):
     def __init__(self):
@@ -118,20 +119,45 @@ def main():
     executor.add_node(recorder)
     executor.add_node(robot)
 
+    HOME = np.array([0, math.radians(-111.26), math.radians(112.08),
+                     math.radians(269.33), math.radians(-89.87), math.radians(95.92)])
+    
+    tf = 2 # seconds
+    discretization_number = 20
     t = JointTrajectory()
+    
+    time_steps = np.linspace(0,tf,discretization_number)
+    joint_angle = -np.pi/6 *(1-np.cos(np.pi/2*time_steps))
+    joint_velocity_analytic = -np.pi/6 * (np.pi/2)  * np.sin(np.pi/2*time_steps)
+    joint_angles = np.array([[angle, 0,0,0,0,0] for angle in joint_angle])
+    joint_angles[:,1:] = HOME[1:]
+
+    joint_velocities = np.array([[vel, 0,0,0,0,0] for vel in joint_velocity_analytic])
+
+    
     t.joint_names = ROBOT_JOINTS
     t.points = [
         JointTrajectoryPoint(
-            positions=[pos-np.pi/4 for pos in HOME],
-            velocities=[0.0] * 6,
-            time_from_start=Duration(sec=5, nanosec=0)
-        ),
-        JointTrajectoryPoint(
-            positions=[pos+np.pi/4 for pos in HOME],
-            velocities=[0.0] * 6,
-            time_from_start=Duration(sec=10, nanosec=0)
-        )
+            positions=list(joint_angles[i]),
+            velocities=list(joint_velocities[i]),
+            time_from_start=Duration(sec=int(time_steps[i]),
+                                     nanosec=int((time_steps[i]-int(time_steps[i]))*1e9))
+        ) for i in range(len(time_steps))
     ]
+
+    # print(t.points)
+    # assert(False)
+    #     JointTrajectoryPoint(
+    #         positions=[pos-np.pi/4 for pos in HOME],
+    #         velocities=[0.0] * 6,
+    #         time_from_start=Duration(sec=5, nanosec=0)
+    #     ),
+    #     JointTrajectoryPoint(
+    #         positions=[pos+np.pi/4 for pos in HOME],
+    #         velocities=[0.0] * 6,
+    #         time_from_start=Duration(sec=10, nanosec=0)
+    #     )
+    # ]
 
     # Start executor in a separate thread
     exec_thread = threading.Thread(target=executor.spin, daemon=True)
