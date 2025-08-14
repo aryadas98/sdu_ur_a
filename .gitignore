@@ -2,5 +2,4 @@ build/
 install/
 log/
 *.pyc
-*.csv
 .vscode/
