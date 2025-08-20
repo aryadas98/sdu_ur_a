@@ -16,6 +16,7 @@ import time
 import math
 import csv
 import os
+import utils
 
 
 class URTrajectoryExecutor(Node):
@@ -135,7 +136,7 @@ class URTrajectoryExecutor(Node):
                     preexec_fn=os.setsid  # so we can kill the whole process group
                 )
             
-            time.sleep(1)  # record before manfrom datetime import datetimeeuver data
+            time.sleep(5)  # record before manfrom datetime import datetimeeuver data
 
             print("Executing trajectory")
             traj_result = self.send_trajectory(traj)
@@ -209,11 +210,29 @@ def main():
     exec_thread.start()
 
     robot.exec_and_record(traj, bag_path)
+    df_js,df_wrench = utils.read_rosbag(bag_path)
+    # df_wrench = low_pass(df_wrench)
+    # df_wrench = add_variance(df_wrench)
 
+    print(f"Processing {bag_path.name}...")
+    # start, end = utils.get_start_time(df_js), utils.get_settling_time(df_wrench)
+    # start_time = start.time_sec if start else None
+    # # df_js, df_wrench = get_start_time(df_js), get_settling_time(df_wrench)
+    # if start  and end is None:
+    #     last_point_duration = traj.points[-1].time_from_start.sec + traj.points[-1].time_from_start.nanosec / 1e9
+    #     end_time = start_time + last_point_duration
+    # else:
+    #     end_time = end.time_sec if end else None
+
+    # # Save start and end times to the bag folder
+    # times_file_path = os.path.join(bag_path, "start_end_times.txt")
+    # with open(times_file_path, "w") as f:
+    #     f.write(f"start_time: {start_time}\n")
+    #     f.write(f"end_time: {end_time}\n")
+    print(f"Times saved to {times_file_path}")
     # Stop executor
     executor.shutdown()
     exec_thread.join(timeout=2)
-
     rclpy.shutdown()
 
 if __name__ == '__main__':
