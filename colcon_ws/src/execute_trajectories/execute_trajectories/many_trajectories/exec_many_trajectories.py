@@ -298,12 +298,14 @@ class URTrajectoryExecutor(Node):
 
 
 def main():
-    N = 1
+    N = 5
     # l_bound = np.array([-0.2, math.pi/2-0.2, 3-0.2])
     # u_bound = np.array([0.2, math.pi/2+0.2, 3+0.2])
-    lb, ub = ManyTrajGenerator.generate_param_bounds()
+    # lb, ub = ManyTrajGenerator.generate_param_bounds()
+    lb, ub, knots, coeffs = ManyTrajGenerator.generate_param_bounds()
 
-    traj_gen = ManyTrajGenerator(n_traj=N, n_params=31, l_bound=lb, u_bound=ub, seed=42)
+    # traj_gen = ManyTrajGenerator(n_traj=N, n_params=31, l_bound=lb, u_bound=ub, seed=42)
+    traj_gen = ManyTrajGenerator(n_traj = 5, n_params = 30, l_bound=lb, u_bound=ub, seed=42, knots = knots, coeffs = coeffs)
 
     rclpy.init()
     executor = rclpy.executors.MultiThreadedExecutor()
