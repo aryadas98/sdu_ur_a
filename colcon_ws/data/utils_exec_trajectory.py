@@ -179,11 +179,22 @@ def get_action_segment(df_js, action_end_time):
         return df_js # Create an empty dataframe
 
 
-def fit_clamped_bspline_zero_end_va(t_real, y, *, degree=3, n_internal_knots=8):
-
+def fit_clamped_bspline_zero_end_va(
+    t_real, y, *, degree=3, n_internal_knots=8,
+    perturb=False,            # <-- toggle noise on/off
+    noise_std=0.0,            # std dev of Gaussian noise (same units as y)
+    random_state=None
+):
+    """
+    Cubic, clamped B-spline fit with zero velocity/acceleration at both ends.
+    - If perturb=True, adds N(0, noise_std^2) to the *middle* (free) control points
+      before building the spline (endpoints' zero-derivative constraints preserved).
+    - If perturb=False, identical behavior to the original function.
+    Returns pos/vel/acc callables in REAL time and the effective control points used.
+    """
     p = degree
     if p != 3:
-        raise ValueError("This helper assumes cubic splines (degree=3) for zero vel/acc tying.")
+        raise ValueError("This helper assumes cubic splines (degree=3).")
     if n_internal_knots < 3:
         raise ValueError("n_internal_knots must be >= 3 so there are free control points.")
 
@@ -210,19 +221,14 @@ def fit_clamped_bspline_zero_end_va(t_real, y, *, degree=3, n_internal_knots=8):
     u_data = (t_real - t0) * alpha
 
     # Open/clamped knot vector on [0,1]
-    if n_internal_knots > 0:
-        knots_internal = np.linspace(0, 1, n_internal_knots + 2)[1:-1]
-    else:
-        knots_internal = np.array([], dtype=float)
-    t = np.r_[np.zeros(p+1), knots_internal, np.ones(p+1)]  # length K + 2(p+1)
+    knots_internal = np.linspace(0, 1, n_internal_knots + 2)[1:-1] if n_internal_knots > 0 else np.array([], float)
+    t = np.r_[np.zeros(p+1), knots_internal, np.ones(p+1)]
+    n_ctrl = len(t) - p - 1  # = n_internal_knots + 4 (for cubic)
 
-    n_ctrl = len(t) - p - 1  # = n_internal_knots + p + 1 = n_internal_knots + 4 (for cubic)
-
-    # Build basis matrix at data u positions
+    # Basis matrix at data positions
     def basis_col(j):
         coeff = np.zeros(n_ctrl); coeff[j] = 1.0
         return BSpline(t, coeff, p)(u_data)
-
     A = np.column_stack([basis_col(j) for j in range(n_ctrl)])
 
     # Tie first three and last three control points to start/end value
@@ -238,13 +244,21 @@ def fit_clamped_bspline_zero_end_va(t_real, y, *, degree=3, n_internal_knots=8):
     # Least squares for free control points
     P_free, *_ = np.linalg.lstsq(A_free, rhs, rcond=None)
 
-    # Assemble control points
-    P = np.empty(n_ctrl)
+    # Base (clean) control points
+    P = np.empty(n_ctrl, dtype=float)
     P[fixed_idx] = P_fixed
     P[free_idx]  = P_free
 
-    # Spline in u-domain and its derivatives
-    spline_u = BSpline(t, P, p)
+    # Optionally perturb only the middle (free) control points
+    if perturb and noise_std > 0.0:
+        rng = np.random.default_rng(random_state)
+        P_eff = P.copy()
+        P_eff[free_idx] += rng.normal(0.0, float(noise_std), size=len(free_idx))
+    else:
+        P_eff = P  # identical to original behavior
+
+    # Build spline (using effective control points) and its derivatives in u-domain
+    spline_u = BSpline(t, P_eff, p)
     s1_u = spline_u.derivative(1)
     s2_u = spline_u.derivative(2)
 
@@ -268,8 +282,9 @@ def fit_clamped_bspline_zero_end_va(t_real, y, *, degree=3, n_internal_knots=8):
         pos=pos, vel=vel, acc=acc,
         t0=t0, T=T, alpha=alpha,
         spline_u=spline_u, s1_u=s1_u, s2_u=s2_u,
-        knots=t, ctrl=P
+        knots=t, ctrl=P_eff  # control points actually used (perturbed or not)
     )
+
 
 def add_noise_to_via_points(model, t_plot, std=0.01):
     """
