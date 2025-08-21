@@ -83,7 +83,6 @@ def get_settling_time(df_wrench,variance_threshold=0.5):
     df_wrench = low_pass(df_wrench)
     df_wrench = add_variance(df_wrench)
     try:
-        unsettle_points = []
         #for i,axis in enumerate(['x', 'y', 'z']):
         var_col = 'force_var'
         # Get all points where variance is above the threshold.
