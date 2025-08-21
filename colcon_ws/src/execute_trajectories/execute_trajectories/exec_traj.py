@@ -71,6 +71,7 @@ class URTrajectoryExecutor(Node):
         traj.joint_names = self.ROBOT_JOINTS
         traj.points = [
             JointTrajectoryPoint(positions = target_point,
+                                 velocities = np.zeros((6,), dtype=float),
                     time_from_start = Duration(seconds=nsec).to_msg())
         ]  # allow nsecs to go to home
 
@@ -123,8 +124,8 @@ class URTrajectoryExecutor(Node):
                     "/tf_static",
                     "/speed_scaling_state_broadcaster/speed_scaling",
                     "-o", rosbag_path,
-                    "--compression-mode", "file",
-                    "--compression-format", "zstd"
+                    # "--compression-mode", "file",
+                    # "--compression-format", "zstd"
                 ]
 
 
@@ -135,7 +136,7 @@ class URTrajectoryExecutor(Node):
                     preexec_fn=os.setsid  # so we can kill the whole process group
                 )
             
-            time.sleep(1)  # record before manfrom datetime import datetimeeuver data
+            time.sleep(5)  # record before maneuver data
 
             print("Executing trajectory")
             traj_result = self.send_trajectory(traj)
@@ -193,7 +194,7 @@ def main():
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     traj_path = os.path.join(script_dir, "traj.csv")
-    bag_path = os.path.join(script_dir, "..", "..", "..", "data", bag_name)
+    bag_path = os.path.join(script_dir, "..", "..", "..", "data", "staging", bag_name)
     bag_path = os.path.abspath(bag_path)  # normalize path
 
     traj = URTrajectoryExecutor.get_traj_from_csv_file(traj_path)

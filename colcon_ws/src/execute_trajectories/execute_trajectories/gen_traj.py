@@ -29,15 +29,15 @@ def my_traj():
     
     HOME_VEL = np.zeros((6,))
 
-    tf = 10  # seconds
+    tf = 2  # seconds
     N = 10  # no of points
 
     A = math.pi/4
     B = -math.pi/4
 
     tt = np.linspace(0, tf, N)
-    base_ang = (A/2) * (1-np.cos(2*np.pi*tt/tf)) + B
-    base_ang_vel = A * (np.pi/tf) * np.sin(2*np.pi*tt/tf)
+    base_ang = (A/2) * (1-np.cos(np.pi*tt/tf)) + B
+    base_ang_vel = (A/2) * (np.pi/tf) * np.sin(np.pi*tt/tf)
 
     pos = np.hstack((base_ang.reshape((N,1)), np.repeat(HOME[1:].reshape((1,-1)), N, 0)))
     vel = np.hstack((base_ang_vel.reshape((N,1)), np.repeat(HOME_VEL[1:].reshape((1,-1)), N, 0)))
