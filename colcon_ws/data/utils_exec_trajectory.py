@@ -94,7 +94,7 @@ def get_settling_time(df_wrench,variance_threshold=0.5):
                 #unsettle_points.append(df_wrench.loc[last_high_var_idx])
         #latest_point = max(unsettle_points, key=lambda x: x['time_sec'])
             latest_point = df_wrench.loc[last_high_var_idx]
-            return latest_point
+            return latest_point.time_sec
         else:
             print(f"No points found with variance above {variance_threshold}.")
             return None
@@ -123,7 +123,7 @@ def low_pass(df_wrench, cutoff_freq=15, filter_order =2, fs=FREQUENCY):
     return df_wrench
 
 
-def add_variance(df_wrench,FREQUENCY=500,window_size=100, n_mean=250):
+def add_variance(df_wrench,FREQUENCY=500,window_size=50, n_mean=250):
     
 
     
@@ -147,6 +147,22 @@ def get_start_time(df_js, threshold=0.05):
     start_point = df_js[df_js['effort'].abs() > threshold].iloc[0]
     return start_point
 # start,end = get_start_time(df_js),get_settling_time(df_wrench)
+
+
+def get_action_start_time(df_js, threshold=0.001, window_size=5):
+    window_size = 6 * int(window_size) #  because we want to use all of the joints
+    velocity_diff = df_js['velocity'].diff().abs()
+    is_above_threshold = velocity_diff > threshold
+    consecutive_count = is_above_threshold.rolling(window=window_size).sum()
+    action_indices = consecutive_count[consecutive_count == window_size].index
+
+    if not action_indices.empty:
+        first_action_start_index = action_indices[0]
+        first_action_end_index = first_action_start_index + window_size - 1
+        action_segment = df_js.loc[first_action_start_index:first_action_end_index]
+        return action_segment.iloc[0]['time_sec']
+    else:
+        return None
 
 
 def get_action_end_time(df_js, threshold=0.001, window_size=5):
