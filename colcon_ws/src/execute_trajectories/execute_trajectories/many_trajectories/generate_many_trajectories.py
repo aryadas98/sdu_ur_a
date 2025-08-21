@@ -1,6 +1,7 @@
 import math
 import numpy as np
 from scipy.stats import qmc
+from scipy.interpolate import CubicSpline
 
 class ManyTrajGenerator():
 
@@ -29,6 +30,13 @@ class ManyTrajGenerator():
 
         return params
     
+    def get_all_params(self):
+        return {"samples": self.sample.flatten().tolist(),
+                "l_bound": self.l_bound.flatten().tolist(),
+                "u_bound": self.u_bound.flatten().tolist(),
+                "n_traj": self.n_traj, "seed": self.seed,
+                "samples_shape": list(self.sample.shape)}
+    
 
     def get_i_traj(self, idx):
         norm_params = self.sample[idx]
@@ -39,16 +47,51 @@ class ManyTrajGenerator():
         return traj
     
 
+    # @staticmethod
+    # def gen_traj_from_params(params: np.ndarray) -> np.ndarray:
+    #     # assume that params modifies the trajectory
+
+    #     t_traj = np.array([0.0, 3.0])
+    #     pos = np.array([[math.pi/2, -3*math.pi/4, 0, -math.pi/2, 0, 0 ],
+    #                     [ 0, -math.pi/4, math.pi/4, 0, math.pi/4, math.pi/2 ]])
+    #     vel = np.zeros((2,6), dtype=float)
+
+    #     return t_traj, pos, vel
+
+
     @staticmethod
-    def gen_traj_from_params(params: np.ndarray) -> np.ndarray:
-        # assume that params modifies the trajectory
+    def gen_traj_from_params(params : np.ndarray) -> np.ndarray:
 
-        t_traj = np.array([0.0, 3.0])
-        pos = np.array([[math.pi/2, -3*math.pi/4, 0, -math.pi/2, 0, 0 ],
-                        [ 0, -math.pi/4, math.pi/4, 0, math.pi/4, math.pi/2 ]])
-        vel = np.zeros((2,6), dtype=float)
+        T  = params[0]
 
-        return t_traj, pos, vel
+        n_joints = 6
+        n_points = len(params[1:]) // n_joints + 2
+
+        q0 = np.array([math.pi/2, -3*math.pi/4, 0, -math.pi/2, 0, 0 ])
+        qf = np.array([ 0, -math.pi/4, math.pi/4, 0, math.pi/4, math.pi/2 ])
+
+        tt = np.linspace(0, T, n_points)
+
+        qq = np.reshape(params[1:], (n_points - 2, n_joints))
+        qq = np.vstack((q0, qq, qf))
+
+        # Cubic spline with zero velocity at start & end
+        cs = CubicSpline(tt, qq, bc_type='clamped', axis=0)
+
+        fine_n_points = 20
+        fine_tt = np.linspace(0, T, fine_n_points)
+        fine_qq = cs(fine_tt)
+        fine_dqq = cs(fine_tt, 1)
+        
+        # import matplotlib.pyplot as plt
+        # plt.plot(fine_tt, fine_qq)
+        # plt.show()
+
+        # plt.plot(fine_tt, fine_dqq)
+        # plt.show()
+
+        return fine_tt, fine_qq, fine_dqq
+
 
     
 
@@ -80,13 +123,49 @@ class ManyTrajGenerator():
     #     return t_traj, pos, vel
 
 
+    @staticmethod
+    def generate_param_bounds():
+        T_param_mean = 3
+        T_param_var = 0.5
+        T_param_min = T_param_mean - T_param_var
+        T_param_max = T_param_mean + T_param_var
+
+        q0 = np.array([math.pi/2, -3*math.pi/4, 0, -math.pi/2, 0, 0 ])
+        qf = np.array([ 0, -math.pi/4, math.pi/4, 0, math.pi/4, math.pi/2 ])
+        T = 3
+
+        n_points = 7
+
+        tt = np.linspace(0, T, n_points)
+
+        times = np.array([0, T])
+        positions = np.vstack((q0, qf))
+
+        # Cubic spline with zero velocity at start & end
+        cs = CubicSpline(times, positions, bc_type='clamped', axis=0)
+
+        qq = cs(tt)
+        qq = qq[1:-1]
+
+        traj_var = 0.1
+
+        traj_param_min = qq - traj_var
+        traj_param_max = qq + traj_var
+
+        lb = np.concatenate([np.array([T_param_min]), traj_param_min.ravel()])
+        ub = np.concatenate([np.array([T_param_max]), traj_param_max.ravel()])
+
+        return lb, ub
+
+
 
 
 if __name__ == "__main__":
-    l_bound = np.array([-0.2, math.pi/2-0.2, 3-0.2])
-    u_bound = np.array([0.2, math.pi/2+0.2, 3+0.2])
+    lb, ub = ManyTrajGenerator.generate_param_bounds()
 
-    mt_gen = ManyTrajGenerator(n_traj = 5, n_params = 3, l_bound=l_bound, u_bound=u_bound, seed=42)
+    mt_gen = ManyTrajGenerator(n_traj = 5, n_params = 31, l_bound=lb, u_bound=ub, seed=42)
 
     print(mt_gen.get_i_traj(0)[1])
-    print(mt_gen.get_i_traj(3)[1])
+    # print(mt_gen.get_i_traj(3)[1])
+
+    # mt_gen.generate_param_bounds()

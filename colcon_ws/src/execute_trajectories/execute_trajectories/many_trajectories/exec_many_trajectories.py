@@ -284,17 +284,26 @@ class URTrajectoryExecutor(Node):
                     return
                 else:
                     return
+        
+        # save all params to a file
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        params_path = os.path.join(script_dir, "..", "..", "..", "..", "data", "dataset", "traj_gen_params.yaml")
+        params_path = os.path.abspath(params_path)  # normalize path
+
+        with open(params_path, "w") as f:
+            yaml.dump(traj_gen.get_all_params(), f)
 
 
         
 
 
 def main():
-    N = 10
-    l_bound = np.array([-0.2, math.pi/2-0.2, 3-0.2])
-    u_bound = np.array([0.2, math.pi/2+0.2, 3+0.2])
+    N = 1
+    # l_bound = np.array([-0.2, math.pi/2-0.2, 3-0.2])
+    # u_bound = np.array([0.2, math.pi/2+0.2, 3+0.2])
+    lb, ub = ManyTrajGenerator.generate_param_bounds()
 
-    traj_gen = ManyTrajGenerator(n_traj=N, n_params=3, l_bound=l_bound, u_bound=u_bound, seed=42)
+    traj_gen = ManyTrajGenerator(n_traj=N, n_params=31, l_bound=lb, u_bound=ub, seed=42)
 
     rclpy.init()
     executor = rclpy.executors.MultiThreadedExecutor()
