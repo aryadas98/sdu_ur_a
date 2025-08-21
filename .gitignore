@@ -3,3 +3,9 @@ install/
 log/
 *.pyc
 .vscode/
+*.yaml
+*.png
+*.mcap
+*.csv
+*.DS_Store
+*.zip
