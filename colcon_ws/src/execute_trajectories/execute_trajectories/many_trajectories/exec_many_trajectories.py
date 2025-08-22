@@ -157,6 +157,13 @@ class URTrajectoryExecutor(Node):
         rosbag_proc = None
             
         try:
+
+            # now check whether the robot is close to the start point
+            start_point = traj.points[0].positions
+
+            err, res = self.move_to_point(start_point, 3)  # give 3 seconds to move to start
+
+
             # start rosbag recording
             
             rosbag_cmd = [
@@ -179,26 +186,20 @@ class URTrajectoryExecutor(Node):
                     stderr=subprocess.DEVNULL,
                     preexec_fn=os.setsid  # so we can kill the whole process group
                 )
-            
-
-            # now check whether the robot is close to the start point
-            start_point = traj.points[0].positions
-
-            err, res = self.move_to_point(start_point, 3)  # give 3 seconds to move to start
 
 
             if not err == self.TrajectoryError.SUCCESS:
                 return err, res
 
             # record for 4s before maneuver
-            self.get_clock().sleep_for(Duration(seconds=1))
+            self.get_clock().sleep_for(Duration(seconds=5))
 
             # Step 4: Execute trajectory
             print("Executing trajectory...")
             err, res = self.send_trajectory(traj)
 
             # record for 3s after maneuver
-            self.get_clock().sleep_for(Duration(seconds=4))
+            self.get_clock().sleep_for(Duration(seconds=5))
 
         finally:
             # Step 5: Always stop recording, even if error occurs
@@ -298,14 +299,14 @@ class URTrajectoryExecutor(Node):
 
 
 def main():
-    N = 5
+    N = 100
     # l_bound = np.array([-0.2, math.pi/2-0.2, 3-0.2])
     # u_bound = np.array([0.2, math.pi/2+0.2, 3+0.2])
     # lb, ub = ManyTrajGenerator.generate_param_bounds()
     lb, ub, knots, coeffs = ManyTrajGenerator.generate_param_bounds()
 
     # traj_gen = ManyTrajGenerator(n_traj=N, n_params=31, l_bound=lb, u_bound=ub, seed=42)
-    traj_gen = ManyTrajGenerator(n_traj = 5, n_params = 30, l_bound=lb, u_bound=ub, seed=42, knots = knots, coeffs = coeffs)
+    traj_gen = ManyTrajGenerator(n_traj = N, n_params = 30, l_bound=lb, u_bound=ub, seed=43, knots = knots, coeffs = coeffs)
 
     rclpy.init()
     executor = rclpy.executors.MultiThreadedExecutor()

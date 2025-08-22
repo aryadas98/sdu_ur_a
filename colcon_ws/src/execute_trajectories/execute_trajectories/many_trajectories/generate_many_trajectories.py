@@ -267,6 +267,7 @@ class ManyTrajGenerator():
 
     @staticmethod
     def generate_param_bounds():
+
         q0 = np.array([math.pi/2, -3*math.pi/4, 0, -math.pi/2, 0, 0 ])
         qf = np.array([ 0, -math.pi/4, math.pi/4, 0, math.pi/4, math.pi/2 ])
         T = 3
@@ -296,7 +297,7 @@ class ManyTrajGenerator():
 
         traj_params = coeffs[3:-3]
 
-        traj_var = 0.1
+        traj_var = 0.05
 
         # print(traj_params)
 
