@@ -1,4 +1,5 @@
 import glob
+import shutil
 from pathlib import Path
 import utils_exec_trajectory
 import yaml
@@ -91,10 +92,10 @@ def gen_traj_from_params(params : np.ndarray) -> np.ndarray:
     # plt.plot(fine_tt, spl(fine_tt, 2))
     # plt.show()
 
-    return fine_tt, fine_qq, fine_dqq
+    return fine_tt, fine_qq, fine_dqq, params
 
 def score(x: np.ndarray) -> float:
-    global robot
+    global robot, itr
 
     """
     Example objective: Shifted Sphere (you MUST replace this).
@@ -113,7 +114,7 @@ def score(x: np.ndarray) -> float:
     #start_time, end_time = utils_exec_trajectory.get_action_start_time(df_js), utils_exec_trajectory.get_settling_time(df_wrench)
     assert x.size == 30, "score(x) expects a 30-D vector"
 
-    tt, pos, vel = gen_traj_from_params(x)
+    tt, pos, vel, params = gen_traj_from_params(x)
 
     traj = JointTrajectory()
     traj.joint_names = URTrajectoryExecutor.ROBOT_JOINTS
@@ -124,16 +125,19 @@ def score(x: np.ndarray) -> float:
             velocities=vel[j],
         ) for j in range(len(tt)) ]
 
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    bag_name = f"run_{itr:05d}_{timestamp}"
+
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    bag_path = os.path.join(script_dir, "bayesian_data", "rosbag")
+    bag_path = os.path.join(script_dir, "bayesian_data", bag_name)
     bag_path = os.path.abspath(bag_path)  # normalize path
 
-    # Ensure directory exists
-    os.makedirs(os.path.dirname(bag_path), exist_ok=True)
+    # # Ensure directory exists
+    # os.makedirs(os.path.dirname(bag_path), exist_ok=True)
 
-    # Remove old bag file if it exists
-    if os.path.exists(bag_path):
-        os.remove(bag_path)
+    # # Remove old bag file if it exists
+    # if os.path.exists(bag_path):
+    #     shutil.rmtree(bag_path)
 
     robot.exec_and_record_one(traj, bag_path)
 
@@ -141,8 +145,17 @@ def score(x: np.ndarray) -> float:
     start_time, end_time = utils_exec_trajectory.get_action_start_time(df_js), utils_exec_trajectory.get_settling_time(df_wrench)
     settling_time = end_time - start_time
 
+    param_file = os.path.join(bag_path, "params.yaml")
+    with open(param_file, "w") as f:
+        yaml.dump({"timestamp":timestamp,
+                    "iteration": itr,
+                    "settling_time": float(settling_time),
+                    "params": params.ravel().tolist()}, f)
+
     # Example: minimum near 0.3 (inside [0,1] box)
     print(f"Settling time {settling_time}")
+
+    itr += 1
 
     return  settling_time #float(np.sum((x - 0.3)**2)) # return settling time : float(end_time - start_time)
 
@@ -151,7 +164,7 @@ def score(x: np.ndarray) -> float:
 
 
 if __name__ == "__main__":
-    global robot
+    global robot, itr
 
     lb = np.array([[ 1.3302012,  -2.31559936, -0.02970244, -1.5302012,  -0.02970244,  0.04059513],
                     [1.05429414, -2.03969231,  0.10825109, -1.25429414,  0.10825109,  0.31650218],
@@ -217,12 +230,14 @@ if __name__ == "__main__":
     exec_thread = threading.Thread(target=executor.spin, daemon=True)
     exec_thread.start()
 
+    itr = 0
+
 
     best_x, best_y, opt, hist = run_bayes_search(
         objective=score,            # <-- plug your own function here
         X_init=X_init,              # <-- your collected inputs (n0,120)
         y_init=y_init,              # <-- their evaluated scores (n0,)
-        n_iter=2,                  # additional BO iterations
+        n_iter=50,                  # additional BO iterations
         batch_size=1,               # suggest 4 points per iteration
         bounds=(0, 1),          # change if your variables have different ranges
         base_estimator="ET",        # "ET" (extra-trees) handles 120D well; try "RF" too

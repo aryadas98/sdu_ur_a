@@ -5,3 +5,4 @@ data/
 *.pyc
 .vscode/
 colcon_ws/src/execute_trajectories/execute_trajectories/many_trajectories/dataset_100
+colcon_ws/src/execute_trajectories/execute_trajectories/many_trajectories/bayesian_data
