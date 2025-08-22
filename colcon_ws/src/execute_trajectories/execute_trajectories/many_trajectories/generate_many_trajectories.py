@@ -47,7 +47,7 @@ class ManyTrajGenerator():
         norm_params = self.sample[idx]
         params = self.l_bound + (self.u_bound - self.l_bound) * norm_params
 
-        traj = self.gen_traj_from_params(params, self.orig_coeffs, knots)
+        traj = self.gen_traj_from_params(params, self.orig_coeffs, self.knots)
 
         return traj
     
@@ -320,6 +320,11 @@ class ManyTrajGenerator():
 
         lb = traj_param_min.ravel()
         ub = traj_param_max.ravel()
+
+        print(lb)
+        print(ub)
+
+        assert(False)
 
         return lb, ub, knots, coeffs
 
