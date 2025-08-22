@@ -328,6 +328,7 @@ def run_bayes_search(
     acq_func: str = "EI",
     random_state: int = 0,
     verbose: bool = True,
+    #initial_traj : np.ndarray = None,
 ) -> Tuple[np.ndarray, float, Optimizer, List[Dict[str, Any]]]:
     """
     Bayesian optimization with warm start that logs losses as it goes.
@@ -345,7 +346,14 @@ def run_bayes_search(
       }
     """
     low, high = bounds
-    space = [Real(low, high, name=f"x{i}") for i in range(30)]
+
+    if X_init is not None:
+        X_init = np.asarray(X_init, dtype=float)
+        min_vals = np.min(X_init, axis=0)
+        max_vals = np.max(X_init, axis=0)
+        space = [Real(min_vals[i] + low, max_vals[i] + high, name=f"x{i}") for i in range(X_init.shape[1])]
+    else:
+        space = [Real(low, high, name=f"x{i}") for i in range(30)]
     opt = Optimizer(dimensions=space, base_estimator=base_estimator,
                     acq_func=acq_func, random_state=random_state)
 
@@ -357,8 +365,8 @@ def run_bayes_search(
             raise ValueError("X_init must have shape (n0, 120)")
         if y_init.shape[0] != X_init.shape[0]:
             raise ValueError("y_init length must match X_init rows")
-        if not (np.all(X_init >= low) and np.all(X_init <= high)):
-            raise ValueError("Some initial points are out of bounds")
+        # if not (np.all(X_init >= low) and np.all(X_init <= high)):
+        #     raise ValueError("Some initial points are out of bounds")
         opt.tell(list(map(list, X_init)), list(map(float, y_init)))
 
     history: List[Dict[str, Any]] = []
