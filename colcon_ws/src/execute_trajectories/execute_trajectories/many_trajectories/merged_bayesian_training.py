@@ -173,7 +173,7 @@ if __name__ == "__main__":
         y_init=y_init,              # <-- their evaluated scores (n0,)
         n_iter=2,                  # additional BO iterations
         batch_size=1,               # suggest 4 points per iteration
-        bounds=(0, 1),          # change if your variables have different ranges
+        bounds=(-0.2, 0.2),          # change if your variables have different ranges
         base_estimator="ET",        # "ET" (extra-trees) handles 120D well; try "RF" too
         acq_func="EI",
         random_state=0
