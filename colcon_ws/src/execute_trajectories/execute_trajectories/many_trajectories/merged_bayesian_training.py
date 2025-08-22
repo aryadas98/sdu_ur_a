@@ -11,16 +11,17 @@ from skopt import Optimizer
 from skopt.space import Real
 from scipy.interpolate import BSpline
 
-# import rclpy
-# from rclpy.node import Node
-# from rclpy.duration import Duration
-# from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-# from control_msgs.action import FollowJointTrajectory
-# from rclpy.action import ActionClient
-# from sensor_msgs.msg import JointState
-# from geometry_msgs.msg import WrenchStamped
-# from std_msgs.msg import Float64
-# from tf2_msgs.msg import TFMessage
+
+from exec_many_trajectories import URTrajectoryExecutor
+
+import rclpy
+from rclpy.node import Node
+from rclpy.duration import Duration
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from control_msgs.action import FollowJointTrajectory
+from rclpy.action import ActionClient
+from sensor_msgs.msg import JointState
+
 from datetime import datetime
 from enum import Enum
 from datetime import timedelta
@@ -80,19 +81,21 @@ def gen_traj_from_params(params : np.ndarray) -> np.ndarray:
     fine_qq = spl(fine_tt)
     fine_dqq = spl(fine_tt, 1)
 
-    import matplotlib.pyplot as plt
-    plt.plot(fine_tt, fine_qq)
-    plt.show()
+    # import matplotlib.pyplot as plt
+    # plt.plot(fine_tt, fine_qq)
+    # plt.show()
 
-    plt.plot(fine_tt, fine_dqq)
-    plt.show()
+    # plt.plot(fine_tt, fine_dqq)
+    # plt.show()
 
-    plt.plot(fine_tt, spl(fine_tt, 2))
-    plt.show()
+    # plt.plot(fine_tt, spl(fine_tt, 2))
+    # plt.show()
 
     return fine_tt, fine_qq, fine_dqq
 
 def score(x: np.ndarray) -> float:
+    global robot
+
     """
     Example objective: Shifted Sphere (you MUST replace this).
     x: shape (120,)
@@ -111,16 +114,61 @@ def score(x: np.ndarray) -> float:
     assert x.size == 30, "score(x) expects a 30-D vector"
 
     tt, pos, vel = gen_traj_from_params(x)
-    print(pos)
-    assert(False)
+
+    traj = JointTrajectory()
+    traj.joint_names = URTrajectoryExecutor.ROBOT_JOINTS
+    traj.points = [
+        JointTrajectoryPoint(
+            time_from_start=Duration(seconds=tt[j]+0.01).to_msg(),
+            positions=pos[j],
+            velocities=vel[j],
+        ) for j in range(len(tt)) ]
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    bag_path = os.path.join(script_dir, "bayesian_data", "rosbag")
+    bag_path = os.path.abspath(bag_path)  # normalize path
+
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(bag_path), exist_ok=True)
+
+    # Remove old bag file if it exists
+    if os.path.exists(bag_path):
+        os.remove(bag_path)
+
+    robot.exec_and_record_one(traj, bag_path)
+
+    df_js, df_wrench = utils_exec_trajectory.read_rosbag(bag_path)
+    start_time, end_time = utils_exec_trajectory.get_action_start_time(df_js), utils_exec_trajectory.get_settling_time(df_wrench)
+    settling_time = end_time - start_time
+
     # Example: minimum near 0.3 (inside [0,1] box)
-    return float(np.sum((x - 0.3)**2)) # return settling time : float(end_time - start_time)
+    print(f"Settling time {settling_time}")
+
+    return  settling_time #float(np.sum((x - 0.3)**2)) # return settling time : float(end_time - start_time)
 
 
 
 
 
 if __name__ == "__main__":
+    global robot
+
+    lb = np.array([[ 1.3302012,  -2.31559936, -0.02970244, -1.5302012,  -0.02970244,  0.04059513],
+                    [1.05429414, -2.03969231,  0.10825109, -1.25429414,  0.10825109,  0.31650218],
+                    [0.68539816, -1.67079633,  0.29269908, -0.88539816,  0.29269908,  0.68539816],
+                    [0.31650218, -1.30190035,  0.47714707, -0.51650218,  0.47714707,  1.05429414],
+                    [0.04059513, -1.02599329,  0.6151006,  -0.24059513,  0.6151006,   1.3302012 ]])
+
+    ub = np.array([[ 1.5302012,  -2.11559936,  0.17029756, -1.3302012,   0.17029756,  0.24059513],
+                   [ 1.25429414, -1.83969231,  0.30825109, -1.05429414,  0.30825109,  0.51650218],
+                   [ 0.88539816, -1.47079633,  0.49269908, -0.68539816,  0.49269908,  0.88539816],
+                   [ 0.51650218, -1.10190035,  0.67714707, -0.31650218,  0.67714707,  1.25429414],
+                   [ 0.24059513, -0.82599329,  0.8151006,  -0.04059513,  0.8151006,   1.5302012 ]])
+
+    lb_f = lb.ravel()
+    ub_f = ub.ravel()
+
+
     data_dir = Path('.')
     bag_dirs = [p.parent for p in data_dir.glob('dataset_100/run_*/*.mcap*')]
     print(f"Found {len(bag_dirs)} bag directories.")
@@ -137,6 +185,7 @@ if __name__ == "__main__":
             params = {}
             continue
         X = params['params']#[1:]
+        X = (X - lb_f)/(ub_f - lb_f)
         print
         print(f"Processing {bag_dir.name}...")
         try:
@@ -158,14 +207,16 @@ if __name__ == "__main__":
     X_init,y_init = X_data,Y_data
 
 
-    # rclpy.init()
-    # executor = rclpy.executors.MultiThreadedExecutor()
-    # robot = URTrajectoryExecutor()
-    # executor.add_node(robot)
 
-    # # Start executor in a separate thread
-    # exec_thread = threading.Thread(target=executor.spin, daemon=True)
-    # exec_thread.start()
+    rclpy.init()
+    robot = URTrajectoryExecutor()
+    executor = rclpy.executors.MultiThreadedExecutor()
+    executor.add_node(robot)
+
+    # Start executor in a separate thread
+    exec_thread = threading.Thread(target=executor.spin, daemon=True)
+    exec_thread.start()
+
 
     best_x, best_y, opt, hist = run_bayes_search(
         objective=score,            # <-- plug your own function here
@@ -179,3 +230,10 @@ if __name__ == "__main__":
         random_state=0
     )
     dump(opt, "opt_state.pkl", compress=3)
+
+
+    # Stop executor
+    executor.shutdown()
+    exec_thread.join(timeout=2)
+
+    rclpy.shutdown()
